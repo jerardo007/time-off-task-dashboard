@@ -1062,8 +1062,11 @@ const html = `<!doctype html>
       const datasets = vas.map(function(va, i) {
         const color = palette[i % palette.length];
         const points = (va.chartPoints || []).map(function(p) {
-          return { x: p.t, y: p.y };
-        });
+  return {
+    x: p.t,
+    y: typeof p.y === "number" ? Math.min(p.y, 15) : p.y
+  };
+});
 
         return {
           label: va.name,
@@ -1130,22 +1133,23 @@ const html = `<!doctype html>
               }
             },
             y: {
-              beginAtZero: true,
-              grid: {
-                color: "rgba(255,255,255,0.05)"
-              },
-              ticks: {
-                color: "#8ea0bc",
-                callback: function(value) {
-                  return value + "m";
-                }
-              },
-              title: {
-                display: true,
-                text: "Minutes since last commission",
-                color: "#8ea0bc"
-              }
-            }
+  beginAtZero: true,
+  max: 15,
+  grid: {
+    color: "rgba(255,255,255,0.05)"
+  },
+  ticks: {
+    color: "#8ea0bc",
+    callback: function(value) {
+      return value + "m";
+    }
+  },
+  title: {
+    display: true,
+    text: "Minutes since last commission",
+    color: "#8ea0bc"
+  }
+}
           }
         }
       });
