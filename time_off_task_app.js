@@ -89,16 +89,35 @@ function getVAStats(commissions, now = Date.now()) {
     const last = total ? vaCommissions[total - 1].timestamp : null;
 
     let avgIntervalMs = null;
+    let latestCycleMs = null;
+
     if (vaCommissions.length >= 2) {
       let totalDiff = 0;
       for (let i = 1; i < vaCommissions.length; i++) {
-        totalDiff += vaCommissions[i].timestamp - vaCommissions[i - 1].timestamp;
+        const diff = vaCommissions[i].timestamp - vaCommissions[i - 1].timestamp;
+        totalDiff += diff;
+        if (i === vaCommissions.length - 1) {
+          latestCycleMs = diff;
+        }
       }
       avgIntervalMs = totalDiff / (vaCommissions.length - 1);
     }
 
     const minutesSinceLast = last ? (now - last) / 60000 : null;
     const throughputPerHour = avgIntervalMs ? 3600000 / avgIntervalMs : null;
+
+    const tenMinAgo = now - 10 * 60 * 1000;
+    const recent = vaCommissions.filter(c => c.timestamp >= tenMinAgo);
+    const recentCount = recent.length;
+
+    let rollingAvgMs = null;
+    if (recent.length >= 2) {
+      let rollingTotal = 0;
+      for (let i = 1; i < recent.length; i++) {
+        rollingTotal += recent[i].timestamp - recent[i - 1].timestamp;
+      }
+      rollingAvgMs = rollingTotal / (recent.length - 1);
+    }
 
     return {
       key,
@@ -107,7 +126,10 @@ function getVAStats(commissions, now = Date.now()) {
       lastCommissionAt: last,
       minutesSinceLast,
       avgIntervalMinutes: avgIntervalMs ? avgIntervalMs / 60000 : null,
-      throughputPerHour
+      latestCycleMinutes: latestCycleMs ? latestCycleMs / 60000 : null,
+      throughputPerHour,
+      rollingAvgMinutes: rollingAvgMs ? rollingAvgMs / 60000 : null,
+      receiptsLast10Min: recentCount
     };
   });
 }
@@ -160,9 +182,9 @@ app.get("/", (req, res) => {
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
-      --bg: #0b0f14;
-      --panel: #121821;
-      --panel-2: #171f2b;
+      --bg: #09111d;
+      --panel: rgba(14, 21, 34, 0.88);
+      --panel-2: rgba(22, 31, 47, 0.9);
       --border: rgba(255,255,255,0.08);
       --text: #f4f7fb;
       --muted: #9aa7b8;
@@ -177,15 +199,15 @@ app.get("/", (req, res) => {
     body {
       margin: 0;
       background:
-        radial-gradient(circle at top left, rgba(78,130,255,0.08), transparent 28%),
-        radial-gradient(circle at top right, rgba(190,78,255,0.07), transparent 24%),
-        var(--bg);
+        radial-gradient(circle at top left, rgba(78,130,255,0.09), transparent 28%),
+        radial-gradient(circle at top right, rgba(190,78,255,0.08), transparent 24%),
+        #050b14;
       color: var(--text);
       font-family: Inter, system-ui, Arial, sans-serif;
     }
 
     .wrap {
-      max-width: 1400px;
+      max-width: 1750px;
       margin: 0 auto;
       padding: 18px;
     }
@@ -200,168 +222,142 @@ app.get("/", (req, res) => {
     }
 
     .title {
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
     }
 
     .subtitle {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 4px;
+      color: #a7b6cb;
+      font-size: 16px;
+      margin-top: 6px;
     }
 
-    .actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    input, button {
+    .pill {
       border: 1px solid var(--border);
-      background: var(--panel);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      color: #a7b6cb;
+      border-radius: 999px;
+      padding: 14px 18px;
       font-size: 14px;
-      outline: none;
     }
 
-    input {
-      min-width: 180px;
-    }
-
-    button {
-      cursor: pointer;
-      font-weight: 700;
-      transition: transform 0.12s ease, opacity 0.12s ease;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      opacity: 0.95;
-    }
-
-    .hero-grid {
+    .summary-row {
       display: grid;
-      grid-template-columns: 1.5fr 1fr;
+      grid-template-columns: repeat(5, minmax(160px, 1fr));
       gap: 14px;
-      margin-bottom: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric-box {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px 18px;
+      box-shadow: var(--shadow);
+      min-height: 108px;
+    }
+
+    .metric-label {
+      color: #9db0ca;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .metric-value {
+      font-size: 31px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 18px;
+      align-items: start;
     }
 
     .panel {
       background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
       border: 1px solid var(--border);
-      border-radius: 18px;
+      border-radius: 28px;
       box-shadow: var(--shadow);
     }
 
     .panel-pad {
-      padding: 14px;
+      padding: 22px;
     }
 
     .panel-title {
-      font-size: 14px;
-      font-weight: 800;
-      margin-bottom: 10px;
-      color: #d9e2ef;
-      letter-spacing: 0.01em;
-    }
-
-    .chart-wrap {
-      height: 360px;
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-
-    .metric-box {
-      background: var(--panel-2);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
-      min-height: 88px;
-    }
-
-    .metric-label {
-      color: var(--muted);
-      font-size: 12px;
+      font-size: 17px;
+      font-weight: 900;
+      color: #eef4ff;
       margin-bottom: 8px;
     }
 
-    .metric-value {
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
+    .panel-subtitle {
+      color: #9db0ca;
+      font-size: 14px;
+      margin-bottom: 14px;
     }
 
-    .metric-sub {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 6px;
+    .chart-wrap {
+      height: 470px;
     }
 
     .va-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin-top: 10px;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 14px;
     }
 
     .va-card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-      box-shadow: var(--shadow);
-      min-height: 145px;
+      border-radius: 26px;
+      padding: 16px;
+      min-height: 360px;
     }
 
     .va-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 10px;
       gap: 10px;
+      margin-bottom: 14px;
     }
 
     .va-name {
-      font-size: 17px;
-      font-weight: 800;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 18px;
+      font-weight: 900;
+      color: #f5f8ff;
     }
 
     .status-pill {
-      font-size: 11px;
-      padding: 5px 8px;
+      font-size: 13px;
+      padding: 8px 14px;
       border-radius: 999px;
-      font-weight: 800;
+      font-weight: 900;
       border: 1px solid transparent;
       white-space: nowrap;
     }
 
     .status-good {
-      background: rgba(99,212,113,0.12);
-      color: #91f2a0;
-      border-color: rgba(99,212,113,0.28);
+      background: rgba(27, 145, 94, 0.16);
+      color: #55ef9e;
+      border-color: rgba(85,239,158,0.22);
     }
 
     .status-warn {
-      background: rgba(247,183,49,0.12);
+      background: rgba(247,183,49,0.14);
       color: #ffd36b;
-      border-color: rgba(247,183,49,0.28);
+      border-color: rgba(247,183,49,0.24);
     }
 
     .status-bad {
-      background: rgba(255,107,107,0.12);
-      color: #ff9c9c;
-      border-color: rgba(255,107,107,0.28);
+      background: rgba(255,107,107,0.14);
+      color: #ff8f9a;
+      border-color: rgba(255,107,107,0.24);
     }
 
     .va-stats {
@@ -373,46 +369,80 @@ app.get("/", (req, res) => {
     .mini-stat {
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px;
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .mini-label {
-      color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 6px;
+      color: #9db0ca;
+      font-size: 12px;
+      line-height: 1.25;
     }
 
     .mini-value {
       font-size: 18px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+      font-weight: 900;
+      line-height: 1.05;
+      color: #f4f7fb;
+      word-break: break-word;
     }
 
-    .footnote {
-      margin-top: 10px;
-      color: var(--muted);
+    .legend-note {
+      color: #9db0ca;
       font-size: 12px;
+      margin-top: 10px;
     }
 
-    @media (max-width: 980px) {
-      .hero-grid {
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    input, button {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 11px 13px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    input { min-width: 170px; }
+
+    button {
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    @media (max-width: 1300px) {
+      .main-grid {
         grid-template-columns: 1fr;
       }
+    }
 
-      .summary-grid {
-        grid-template-columns: 1fr 1fr;
+    @media (max-width: 1100px) {
+      .summary-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .va-grid {
+        grid-template-columns: 1fr;
       }
     }
 
-    @media (max-width: 640px) {
-      .summary-grid,
+    @media (max-width: 650px) {
+      .summary-row,
       .va-stats {
         grid-template-columns: 1fr;
       }
-
       .chart-wrap {
-        height: 300px;
+        height: 320px;
       }
     }
   </style>
@@ -422,53 +452,49 @@ app.get("/", (req, res) => {
     <div class="topbar">
       <div>
         <div class="title">VA Time Off Task Dashboard</div>
-        <div class="subtitle">Live sawtooth trend: minutes since each VA's last commission over the past 10 minutes</div>
+        <div class="subtitle">Live Notion-backed view with sawtooth interval trend, cycle time, and throughput.</div>
       </div>
+      <div class="pill" id="lastRefresh">Last refresh: --</div>
+    </div>
 
-      <div class="actions">
-        <input id="vaInput" type="text" placeholder="Enter VA name" />
-        <button id="addCommissionBtn">Add Commission</button>
+    <div class="summary-row">
+      <div class="metric-box">
+        <div class="metric-label">Total VAs</div>
+        <div class="metric-value" id="totalVAs">0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">On Pace</div>
+        <div class="metric-value" id="onPaceCount">0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Slowing Down</div>
+        <div class="metric-value" id="slowingCount">0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Off Task</div>
+        <div class="metric-value" id="offTaskCount">0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Receipts in Last 10 Min</div>
+        <div class="metric-value" id="receiptsLast10">0</div>
       </div>
     </div>
 
-    <div class="hero-grid">
+    <div class="main-grid">
       <div class="panel panel-pad">
         <div class="panel-title">Commission Interval Trend</div>
+        <div class="panel-subtitle">Past 10 minutes. Each line rises until the next commission drops it back to zero.</div>
         <div class="chart-wrap">
           <canvas id="intervalChart"></canvas>
         </div>
-      </div>
+        <div class="legend-note">Status guide: on pace under 3 min, slowing down under 6 min, off task at 6+ min.</div>
 
-      <div class="panel panel-pad">
-        <div class="panel-title">Live Summary</div>
-        <div class="summary-grid">
-          <div class="metric-box">
-            <div class="metric-label">Active VAs</div>
-            <div class="metric-value" id="activeVAs">0</div>
-            <div class="metric-sub">Unique VAs detected</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Total Commissions</div>
-            <div class="metric-value" id="totalCommissions">0</div>
-            <div class="metric-sub">All recorded entries</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Average Cycle Time</div>
-            <div class="metric-value" id="avgCycleTime">--</div>
-            <div class="metric-sub">Across all VAs</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Slowest Current Gap</div>
-            <div class="metric-value" id="slowestGap">--</div>
-            <div class="metric-sub">Highest minutes since last commission</div>
-          </div>
+        <div class="actions">
+          <input id="vaInput" type="text" placeholder="Enter VA name" />
+          <button id="addCommissionBtn">Add Commission</button>
         </div>
-        <div class="footnote">Status colors are based on current minutes since last commission: good under 3m, warning under 6m, bad 6m+.</div>
       </div>
-    </div>
 
-    <div class="panel panel-pad">
-      <div class="panel-title">VA Cards</div>
       <div class="va-grid" id="vaGrid"></div>
     </div>
   </div>
@@ -476,10 +502,10 @@ app.get("/", (req, res) => {
   <script>
     const COLORS = [
       { border: "rgb(91, 143, 249)", fill: "rgba(91, 143, 249, 0.18)" },
-      { border: "rgb(255, 99, 132)", fill: "rgba(255, 99, 132, 0.16)" },
+      { border: "rgb(190, 120, 255)", fill: "rgba(190, 120, 255, 0.18)" },
       { border: "rgb(75, 192, 192)", fill: "rgba(75, 192, 192, 0.16)" },
       { border: "rgb(255, 205, 86)", fill: "rgba(255, 205, 86, 0.16)" },
-      { border: "rgb(180, 120, 255)", fill: "rgba(180, 120, 255, 0.16)" },
+      { border: "rgb(255, 99, 132)", fill: "rgba(255, 99, 132, 0.16)" },
       { border: "rgb(255, 159, 64)", fill: "rgba(255, 159, 64, 0.16)" },
       { border: "rgb(54, 162, 235)", fill: "rgba(54, 162, 235, 0.16)" },
       { border: "rgb(0, 220, 130)", fill: "rgba(0, 220, 130, 0.16)" }
@@ -497,26 +523,35 @@ app.get("/", (req, res) => {
 
     function formatMinutes(value) {
       if (value == null || Number.isNaN(value)) return "--";
-      if (value < 1) return value.toFixed(1) + "m";
-      return value.toFixed(1) + "m";
+      if (value < 1) {
+        return Math.round(value * 60) + " sec";
+      }
+      return value.toFixed(1) + " min";
     }
 
     function formatCycle(value) {
       if (value == null || Number.isNaN(value)) return "--";
+      if (value >= 60) {
+        return (value / 60).toFixed(1) + " hr";
+      }
       return value.toFixed(1) + " min";
     }
 
-    function formatPerHour(value) {
+    function formatThroughput(value) {
       if (value == null || Number.isNaN(value)) return "--";
-      return value.toFixed(1) + "/hr";
+      if (value === 0) return "--";
+      const minutesPerCommission = 60 / value;
+      return "1 commission / " + formatCycle(minutesPerCommission);
     }
 
     function formatClock(ts) {
       if (!ts) return "--";
-      return new Date(ts).toLocaleTimeString([], {
+      return new Date(ts).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
         hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit"
+        minute: "2-digit"
       });
     }
 
@@ -528,14 +563,15 @@ app.get("/", (req, res) => {
     }
 
     function getStatusText(minutes) {
-      if (minutes == null) return "No data";
-      if (minutes < 3) return "On pace";
-      if (minutes < 6) return "Slowing";
-      return "Idle";
+      if (minutes == null) return "No Data";
+      if (minutes < 3) return "On Pace";
+      if (minutes < 6) return "Slowing Down";
+      return "Off Task";
     }
 
     function buildSeries(commissions, vaKey, endNow, windowMinutes = 10, stepSeconds = 5) {
       const start = endNow - windowMinutes * 60 * 1000;
+
       const vaCommissions = commissions
         .filter(c => normalizeName(c.va) === vaKey)
         .map(c => c.timestamp)
@@ -545,17 +581,20 @@ app.get("/", (req, res) => {
       let index = 0;
       let lastCommission = null;
 
+      while (index < vaCommissions.length && vaCommissions[index] < start) {
+        lastCommission = vaCommissions[index];
+        index++;
+      }
+
       for (let t = start; t <= endNow; t += stepSeconds * 1000) {
         while (index < vaCommissions.length && vaCommissions[index] <= t) {
           lastCommission = vaCommissions[index];
           index++;
         }
 
-        const y = lastCommission ? (t - lastCommission) / 60000 : null;
-
         points.push({
           x: t,
-          y: y
+          y: lastCommission ? (t - lastCommission) / 60000 : null
         });
       }
 
@@ -603,11 +642,15 @@ app.get("/", (req, res) => {
         },
         plugins: {
           legend: {
+            position: "top",
+            align: "end",
             labels: {
               color: "#dfe7f2",
-              boxWidth: 14,
-              boxHeight: 14,
-              padding: 16,
+              usePointStyle: true,
+              pointStyle: "circle",
+              boxWidth: 10,
+              boxHeight: 10,
+              padding: 18,
               font: {
                 size: 12,
                 weight: "700"
@@ -618,7 +661,7 @@ app.get("/", (req, res) => {
             callbacks: {
               label: function(context) {
                 const y = context.parsed.y;
-                return \`\${context.dataset.label}: \${y == null ? "--" : y.toFixed(2) + " min"}\`;
+                return context.dataset.label + ": " + (y == null ? "--" : y.toFixed(2) + " min");
               }
             }
           }
@@ -626,7 +669,7 @@ app.get("/", (req, res) => {
         elements: {
           line: {
             tension: 0,
-            borderWidth: 2.5
+            borderWidth: 3
           },
           point: {
             radius: 0,
@@ -637,6 +680,8 @@ app.get("/", (req, res) => {
         scales: {
           x: {
             type: "linear",
+            min: Date.now() - 10 * 60 * 1000,
+            max: Date.now(),
             ticks: {
               color: "#9aa7b8",
               callback: function(value) {
@@ -652,6 +697,7 @@ app.get("/", (req, res) => {
           },
           y: {
             beginAtZero: true,
+            suggestedMax: 15,
             ticks: {
               color: "#9aa7b8",
               callback: function(value) {
@@ -660,7 +706,7 @@ app.get("/", (req, res) => {
             },
             title: {
               display: true,
-              text: "Minutes Since Last Commission",
+              text: "Minutes since last commission",
               color: "#dfe7f2",
               font: {
                 weight: "700"
@@ -677,30 +723,43 @@ app.get("/", (req, res) => {
     function renderSummary() {
       const vas = latestState.vas || [];
       const commissions = latestState.commissions || [];
+      const now = Date.now();
+      const tenMinAgo = now - 10 * 60 * 1000;
 
-      document.getElementById("activeVAs").textContent = vas.length;
-      document.getElementById("totalCommissions").textContent = commissions.length;
+      let onPace = 0;
+      let slowing = 0;
+      let offTask = 0;
 
-      const avgCycleValues = vas
-        .map(v => v.avgIntervalMinutes)
-        .filter(v => v != null && !Number.isNaN(v));
+      vas.forEach(v => {
+        const mins = v.lastCommissionAt ? (now - v.lastCommissionAt) / 60000 : null;
+        if (mins == null) {
+          slowing++;
+        } else if (mins < 3) {
+          onPace++;
+        } else if (mins < 6) {
+          slowing++;
+        } else {
+          offTask++;
+        }
+      });
 
-      const avgCycle =
-        avgCycleValues.length
-          ? avgCycleValues.reduce((a, b) => a + b, 0) / avgCycleValues.length
-          : null;
+      const recentTotal = commissions.filter(c => c.timestamp >= tenMinAgo).length;
 
-      const currentMinutes = vas
-        .map(v => v.minutesSinceLast)
-        .filter(v => v != null && !Number.isNaN(v));
-
-      const slowest =
-        currentMinutes.length
-          ? Math.max(...currentMinutes)
-          : null;
-
-      document.getElementById("avgCycleTime").textContent = avgCycle == null ? "--" : avgCycle.toFixed(1) + " min";
-      document.getElementById("slowestGap").textContent = slowest == null ? "--" : slowest.toFixed(1) + " min";
+      document.getElementById("totalVAs").textContent = vas.length;
+      document.getElementById("onPaceCount").textContent = onPace;
+      document.getElementById("slowingCount").textContent = slowing;
+      document.getElementById("offTaskCount").textContent = offTask;
+      document.getElementById("receiptsLast10").textContent = recentTotal;
+      document.getElementById("lastRefresh").textContent =
+        "Last refresh: " +
+        new Date(now).toLocaleString([], {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit"
+        });
     }
 
     function renderVACards() {
@@ -723,29 +782,49 @@ app.get("/", (req, res) => {
 
         card.innerHTML = \`
           <div class="va-head">
-            <div class="va-name" title="\${v.label}">\${v.label}</div>
+            <div class="va-name">\${v.label}</div>
             <div class="status-pill \${getStatusClass(v.minutesSinceLast)}">\${getStatusText(v.minutesSinceLast)}</div>
           </div>
 
           <div class="va-stats">
             <div class="mini-stat">
-              <div class="mini-label">Minutes Since Last</div>
+              <div class="mini-label">Minutes since last commission</div>
               <div class="mini-value">\${formatMinutes(v.minutesSinceLast)}</div>
             </div>
 
             <div class="mini-stat">
-              <div class="mini-label">Avg Cycle Time</div>
+              <div class="mini-label">Throughput</div>
+              <div class="mini-value">\${formatThroughput(v.throughputPerHour)}</div>
+            </div>
+
+            <div class="mini-stat">
+              <div class="mini-label">Latest cycle time</div>
+              <div class="mini-value">\${formatCycle(v.latestCycleMinutes)}</div>
+            </div>
+
+            <div class="mini-stat">
+              <div class="mini-label">Avg cycle time</div>
               <div class="mini-value">\${formatCycle(v.avgIntervalMinutes)}</div>
             </div>
 
             <div class="mini-stat">
-              <div class="mini-label">Throughput</div>
-              <div class="mini-value">\${formatPerHour(v.throughputPerHour)}</div>
+              <div class="mini-label">10-min rolling avg</div>
+              <div class="mini-value">\${formatCycle(v.rollingAvgMinutes)}</div>
             </div>
 
             <div class="mini-stat">
-              <div class="mini-label">Last Commission</div>
-              <div class="mini-value" style="font-size:15px;">\${formatClock(v.lastCommissionAt)}</div>
+              <div class="mini-label">Receipts last 10 min</div>
+              <div class="mini-value">\${v.receiptsLast10Min ?? 0}</div>
+            </div>
+
+            <div class="mini-stat">
+              <div class="mini-label">Receipt count</div>
+              <div class="mini-value">\${v.total}</div>
+            </div>
+
+            <div class="mini-stat">
+              <div class="mini-label">Last commission</div>
+              <div class="mini-value">\${formatClock(v.lastCommissionAt)}</div>
             </div>
           </div>
         \`;
@@ -758,6 +837,10 @@ app.get("/", (req, res) => {
       const vas = latestState.vas || [];
       const commissions = latestState.commissions || [];
       const now = Date.now();
+      const start = now - 10 * 60 * 1000;
+
+      chart.options.scales.x.min = start;
+      chart.options.scales.x.max = now;
 
       chart.data.datasets = vas.map((va, i) => {
         const color = COLORS[i % COLORS.length];
