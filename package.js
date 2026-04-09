@@ -1,0 +1,12 @@
+{
+  "name": "time-off-task-dashboard",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "time_off_task_app.js",
+  "scripts": {
+    "start": "node time_off_task_app.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
