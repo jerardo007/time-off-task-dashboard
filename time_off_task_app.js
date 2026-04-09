@@ -102,7 +102,9 @@ function formatPropertyValue(prop) {
     case "created_time":
       return prop.created_time || null;
     case "people":
-      return (prop.people || []).map((p) => p.name || p.person?.email || "").filter(Boolean);
+      return (prop.people || [])
+        .map((p) => p.name || p.person?.email || "")
+        .filter(Boolean);
     case "relation":
       return (prop.relation || []).map((x) => x.id);
     case "formula": {
@@ -372,10 +374,10 @@ function normalizeReceipt(page) {
   let vaName = null;
 
   if (Array.isArray(personNames) && personNames.length) {
-  vaName = personNames[0];
-} else if (typeof vaCounterRaw === "string" && vaCounterRaw.trim()) {
-  vaName = vaCounterRaw.trim();
-}
+    vaName = personNames[0];
+  } else if (typeof vaCounterRaw === "string" && vaCounterRaw.trim()) {
+    vaName = vaCounterRaw.trim();
+  }
 
   return {
     id: page.id,
@@ -1059,29 +1061,34 @@ const html = `<!doctype html>
 
       const datasets = vas.map(function(va, i) {
         const color = palette[i % palette.length];
-        const points = (va.chartPoints || []).map(function(p) {
-  return {
-    x: p.t,
-    y: typeof p.y === "number" ? Math.min(p.y, 15) : p.y
-  };
-});
+        const points = (va.chartPoints || [])
+          .filter(function(p) {
+            return typeof p.y === "number";
+          })
+          .map(function(p) {
+            return {
+              x: p.t,
+              y: Math.min(p.y, 15)
+            };
+          });
 
         return {
-  label: va.name,
-  data: points,
-  parsing: false,
-  borderColor: color.line,
-  backgroundColor: color.fill,
-  fill: false,
-  pointRadius: 4,
-  pointHoverRadius: 6,
-  pointBackgroundColor: color.line,
-  pointBorderColor: color.line,
-  pointBorderWidth: 0,
-  borderWidth: 4,
-  tension: 0,
-  spanGaps: false
-};
+          label: va.name,
+          data: points,
+          parsing: false,
+          showLine: true,
+          borderColor: color.line,
+          backgroundColor: color.fill,
+          fill: false,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          pointBackgroundColor: color.line,
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 1,
+          borderWidth: 5,
+          tension: 0,
+          spanGaps: false
+        };
       });
 
       chartInstance = new Chart(canvas, {
@@ -1134,23 +1141,23 @@ const html = `<!doctype html>
               }
             },
             y: {
-  beginAtZero: true,
-  max: 15,
-  grid: {
-    color: "rgba(255,255,255,0.05)"
-  },
-  ticks: {
-    color: "#8ea0bc",
-    callback: function(value) {
-      return value + "m";
-    }
-  },
-  title: {
-    display: true,
-    text: "Minutes since last commission",
-    color: "#8ea0bc"
-  }
-}
+              beginAtZero: true,
+              max: 15,
+              grid: {
+                color: "rgba(255,255,255,0.05)"
+              },
+              ticks: {
+                color: "#8ea0bc",
+                callback: function(value) {
+                  return value + "m";
+                }
+              },
+              title: {
+                display: true,
+                text: "Minutes since last commission",
+                color: "#8ea0bc"
+              }
+            }
           }
         }
       });
