@@ -372,12 +372,10 @@ function normalizeReceipt(page) {
   let vaName = null;
 
   if (Array.isArray(personNames) && personNames.length) {
-    vaName = personNames[0];
-  } else if (typeof vaCounterRaw === "string" && vaCounterRaw.trim()) {
-    vaName = vaCounterRaw.trim();
-  } else if (title.trim()) {
-    vaName = title.trim();
-  }
+  vaName = personNames[0];
+} else if (typeof vaCounterRaw === "string" && vaCounterRaw.trim()) {
+  vaName = vaCounterRaw.trim();
+}
 
   return {
     id: page.id,
@@ -1069,18 +1067,21 @@ const html = `<!doctype html>
 });
 
         return {
-          label: va.name,
-          data: points,
-          parsing: false,
-          borderColor: color.line,
-          backgroundColor: color.fill,
-          fill: true,
-          pointRadius: 0,
-          pointHoverRadius: 3,
-          borderWidth: 2,
-          tension: 0,
-          spanGaps: true
-        };
+  label: va.name,
+  data: points,
+  parsing: false,
+  borderColor: color.line,
+  backgroundColor: color.fill,
+  fill: false,
+  pointRadius: 4,
+  pointHoverRadius: 6,
+  pointBackgroundColor: color.line,
+  pointBorderColor: color.line,
+  pointBorderWidth: 0,
+  borderWidth: 4,
+  tension: 0,
+  spanGaps: false
+};
       });
 
       chartInstance = new Chart(canvas, {
