@@ -172,6 +172,100 @@ app.post("/api/commission", (req, res) => {
   });
 });
 
+app.post("/api/notion-webhook", (req, res) => {
+  try {
+    const data = loadData();
+    const body = req.body || {};
+
+    const rawVA =
+      body.va ||
+      body.vaName ||
+      body.va_name ||
+      body.name ||
+      body.employee ||
+      body.employeeName ||
+      body.assignee ||
+      body.chatter;
+
+    const rawTimestamp =
+      body.timestamp ||
+      body.time ||
+      body.createdAt ||
+      body.completedAt ||
+      body.completed_at ||
+      body.date;
+
+    const rawStatus =
+      body.status ||
+      body.Status ||
+      body.stage ||
+      body.state;
+
+    if (!rawVA || !String(rawVA).trim()) {
+      return res.status(400).json({
+        error: "VA name is required in webhook body."
+      });
+    }
+
+    if (rawStatus && String(rawStatus).trim().toLowerCase() !== "completed") {
+      return res.json({
+        success: false,
+        ignored: true,
+        reason: "Status was not Completed."
+      });
+    }
+
+    let parsedTimestamp = Date.now();
+
+    if (rawTimestamp) {
+      const t =
+        typeof rawTimestamp === "number"
+          ? rawTimestamp
+          : Date.parse(String(rawTimestamp));
+
+      if (!Number.isNaN(t)) {
+        parsedTimestamp = t;
+      }
+    }
+
+    const cleanName = displayVAName(rawVA);
+
+    const duplicate = data.commissions.find(c => {
+      return (
+        normalizeVAName(c.va) === normalizeVAName(cleanName) &&
+        Math.abs(c.timestamp - parsedTimestamp) <= 15000
+      );
+    });
+
+    if (duplicate) {
+      return res.json({
+        success: true,
+        duplicate: true,
+        added: duplicate
+      });
+    }
+
+    const newCommission = {
+      va: cleanName,
+      timestamp: parsedTimestamp
+    };
+
+    data.commissions.push(newCommission);
+    saveData(data);
+
+    return res.json({
+      success: true,
+      source: "notion-webhook",
+      added: newCommission
+    });
+  } catch (err) {
+    console.error("Webhook error:", err);
+    return res.status(500).json({
+      error: "Webhook failed."
+    });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
