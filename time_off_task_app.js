@@ -207,13 +207,21 @@ app.post("/api/notion-webhook", (req, res) => {
       });
     }
 
-    if (rawStatus && String(rawStatus).trim().toLowerCase() !== "completed") {
-      return res.json({
-        success: false,
-        ignored: true,
-        reason: "Status was not Completed."
-      });
-    }
+    if (rawStatus) {
+  const normalizedStatus = String(rawStatus).trim().toLowerCase();
+
+  if (
+    normalizedStatus !== "completed" &&
+    normalizedStatus !== "complete" &&
+    normalizedStatus !== "done"
+  ) {
+    return res.json({
+      success: false,
+      ignored: true,
+      reason: "Status was not completed/complete/done."
+    });
+  }
+}
 
     let parsedTimestamp = Date.now();
 
